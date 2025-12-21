@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake:*)",
+      "Bash(gcc:*)",
+      "Bash(where:*)"
+    ]
+  }
+}
