@@ -1,10 +1,20 @@
-/*
- * 贪吃蛇游戏 (Snake Game)
+/**
+ * @file Snake.c
+ * @brief Windows控制台贪吃蛇游戏
  *
- * 文件: Snake.c
- * 描述: Windows控制台版本的贪吃蛇游戏，使用C语言编写，基于Windows API实现图形界面
- * 功能: 包含游戏逻辑、控制台图形显示、用户输入处理等完整实现
- * 编码: UTF-8 (支持中文字符显示)
+ * 基于Windows API实现的文字版贪吃蛇游戏，支持中文显示。
+ * 游戏包含完整的游戏逻辑、控制台图形界面和用户输入处理。
+ *
+ * 功能特性:
+ * - 20x20游戏区域，带墙壁边界
+ * - 支持WASD和方向键控制
+ * - 增量渲染，消除闪烁
+ * - 游戏速度随得分增加
+ * - 支持游戏重玩功能
+ * - UTF-8编码，支持中文显示
+ *
+ * 编码: UTF-8
+ * 平台: Windows
  */
 
 #include <stdio.h>
@@ -21,111 +31,141 @@
 // 常量定义
 // =============================================
 
-// 游戏区域大小（内部可玩区域，不包含边框）
-#define GAME_WIDTH 20  // 游戏区域宽度（单元格数）
-#define GAME_HEIGHT 20 // 游戏区域高度（单元格数）
+// 游戏区域尺寸（内部可玩区域，不包含边框）
+#define GAME_WIDTH   20  ///< 游戏区域宽度（单元格数）
+#define GAME_HEIGHT  20  ///< 游戏区域高度（单元格数）
 
-// 游戏池大小（包括边框）
-#define POOL_WIDTH (GAME_WIDTH + 2)   // 游戏池宽度 = 游戏宽度 + 左右边框
-#define POOL_HEIGHT (GAME_HEIGHT + 2) // 游戏池高度 = 游戏高度 + 上下边框
+// 游戏池尺寸（包括边框）
+#define POOL_WIDTH   (GAME_WIDTH + 2)   ///< 游戏池宽度 = 游戏宽度 + 左右边框
+#define POOL_HEIGHT  (GAME_HEIGHT + 2)  ///< 游戏池高度 = 游戏高度 + 上下边框
 
-// 控制台显示相关常量
-#define CONSOLE_WIDTH 80  // 控制台缓冲区宽度（字符数）
-#define CONSOLE_HEIGHT 30 // 控制台缓冲区高度（行数）
+// 控制台显示常量
+#define CONSOLE_WIDTH   80  ///< 控制台缓冲区宽度（字符数）
+#define CONSOLE_HEIGHT  30  ///< 控制台缓冲区高度（行数）
 
 // 游戏区域在控制台中的起始位置（左上角坐标）
-#define GAME_AREA_X 8 // 游戏区域起始X坐标（列数）
-#define GAME_AREA_Y 4 // 游戏区域起始Y坐标（行数）
+#define GAME_AREA_X  8  ///< 游戏区域起始X坐标（控制台列数）
+#define GAME_AREA_Y  4  ///< 游戏区域起始Y坐标（控制台行数）
 
 // 游戏标题
-#define GAME_TITLE L"贪吃蛇游戏 - 文字版" // 游戏标题（宽字符字符串）
-#define GAME_TITLE_LENGTH 10              // 标题字符数（用于居中计算）
+#define GAME_TITLE       L"贪吃蛇游戏 - 文字版"  ///< 游戏标题（宽字符字符串）
+#define GAME_TITLE_LENGTH  10                    ///< 标题字符数（用于居中计算）
 
-// 方向枚举 - 表示蛇的移动方向
+/**
+ * @enum Direction
+ * @brief 蛇的移动方向枚举
+ *
+ * 定义蛇在游戏网格中可能移动的四个基本方向。
+ */
 typedef enum
 {
-    DIR_UP,   // 向上移动
-    DIR_DOWN, // 向下移动
-    DIR_LEFT, // 向左移动
-    DIR_RIGHT // 向右移动
+    DIR_UP,      ///< 向上移动
+    DIR_DOWN,    ///< 向下移动
+    DIR_LEFT,    ///< 向左移动
+    DIR_RIGHT    ///< 向右移动
 } Direction;
 
-// 游戏池单元格类型 - 表示游戏网格中每个单元格的状态
+/**
+ * @enum CellType
+ * @brief 游戏池单元格类型枚举
+ *
+ * 定义游戏网格中每个单元格可能的状态类型，用于渲染和碰撞检测。
+ * 使用特殊十六进制值便于调试识别。
+ */
 typedef enum
 {
-    CELL_EMPTY = -0x66,         // 空单元格（可通行区域）
-    CELL_FOOD = 0xcc,           // 食物（蛇的目标）
-    CELL_SNAKE_HEAD = 0xff,     // 蛇头（蛇的头部，控制移动方向）
-    CELL_SNAKE_BODY_UP = 0x0,   // 蛇身（向上移动方向）
-    CELL_SNAKE_BODY_DOWN,       // 蛇身（向下移动方向）
-    CELL_SNAKE_BODY_LEFT,       // 蛇身（向左移动方向）
-    CELL_SNAKE_BODY_RIGHT,      // 蛇身（向右移动方向）
-    CELL_SNAKE_TAIL = 0x66ccff, // 蛇尾（蛇的尾部，最后一段）
-    CELL_WALL = 0x325           // 墙壁（不可通行的边界）
+    CELL_EMPTY = -0x66,         ///< 空单元格（可通行区域）
+    CELL_FOOD = 0xcc,           ///< 食物（蛇的目标）
+    CELL_SNAKE_HEAD = 0xff,     ///< 蛇头（蛇的头部，控制移动方向）
+    CELL_SNAKE_BODY_UP = 0x0,   ///< 蛇身（向上移动方向）
+    CELL_SNAKE_BODY_DOWN,       ///< 蛇身（向下移动方向）
+    CELL_SNAKE_BODY_LEFT,       ///< 蛇身（向左移动方向）
+    CELL_SNAKE_BODY_RIGHT,      ///< 蛇身（向右移动方向）
+    CELL_SNAKE_TAIL = 0x66ccff, ///< 蛇尾（蛇的尾部，最后一段）
+    CELL_WALL = 0x325           ///< 墙壁（不可通行的边界）
 } CellType;
 
-// 位置结构体 - 表示二维坐标系中的点（用于游戏池和控制台坐标）
+/**
+ * @struct Position
+ * @brief 二维坐标位置结构体
+ *
+ * 表示游戏池或控制台中的坐标位置，用于定位单元格和渲染位置。
+ */
 typedef struct
 {
-    int x; // X坐标（水平方向）
-    int y; // Y坐标（垂直方向）
+    int x; ///< X坐标（水平方向）
+    int y; ///< Y坐标（垂直方向）
 } Position;
 
-// 蛇结构体 - 简化版本，只存储头尾位置（基于链表思想，但仅记录关键位置）
+/**
+ * @struct Snake
+ * @brief 蛇状态结构体
+ *
+ * 简化的蛇状态管理，只存储头尾位置和方向信息，基于游戏池单元格跟踪身体连接。
+ * 使用输入缓冲机制防止蛇连续反向移动。
+ */
 typedef struct
 {
-    Position head;            // 蛇头位置（当前头部坐标）
-    Position tail;            // 蛇尾位置（当前尾部坐标）
-    int length;               // 蛇的长度（包括头、身、尾）
-    Direction direction;      // 当前移动方向（正在执行的方向）
-    Direction next_direction; // 下一个方向（用于输入缓冲，防止连续转向）
-    Direction tail_direction; // 蛇尾移动方向（用于更新蛇尾位置）
+    Position head;            ///< 蛇头位置（当前头部坐标）
+    Position tail;            ///< 蛇尾位置（当前尾部坐标）
+    int length;               ///< 蛇的长度（包括头、身、尾）
+    Direction direction;      ///< 当前移动方向（正在执行的方向）
+    Direction next_direction; ///< 下一个方向（用于输入缓冲，防止连续转向）
+    Direction tail_direction; ///< 蛇尾移动方向（用于更新蛇尾位置）
 } Snake;
 
-// 游戏状态结构体 - 包含游戏运行所需的所有状态信息
+/**
+ * @struct GameState
+ * @brief 游戏全局状态结构体
+ *
+ * 包含游戏运行所需的所有状态信息，作为游戏的主数据结构。
+ */
 typedef struct
 {
-    Snake snake;    // 蛇的状态（位置、长度、方向等）
-    Position food;  // 食物位置
-    int score;      // 当前得分
-    bool game_over; // 游戏结束标志（true表示游戏结束）
-    int speed;      // 游戏速度（毫秒，控制蛇移动的延迟时间）
+    Snake snake;    ///< 蛇的状态（位置、长度、方向等）
+    Position food;  ///< 食物位置
+    int score;      ///< 当前得分
+    bool game_over; ///< 游戏结束标志（true表示游戏结束）
+    int speed;      ///< 游戏速度（毫秒，控制蛇移动的延迟时间）
 } GameState;
 
 // =============================================
 // 全局变量
 // =============================================
 
-static HANDLE hConsole = NULL;                 // Windows控制台句柄，用于所有控制台输出操作
-static CellType pool[POOL_HEIGHT][POOL_WIDTH]; // 游戏池二维数组，存储每个单元格的当前状态
-static bool dirty[POOL_HEIGHT][POOL_WIDTH];    // 脏标记数组，标记需要重新绘制的单元格
-static GameState game;                         // 游戏状态实例，包含蛇、食物、分数等所有游戏数据
-static int console_width = CONSOLE_WIDTH / 2;  // 实际控制台宽度（字符数，考虑宽字符显示）
-static int console_height = CONSOLE_HEIGHT;    // 实际控制台高度（行数）
-static int last_score = -1;                    // 上一次绘制的得分，用于增量更新
-static int last_speed = -1;                    // 上一次绘制的速度，用于增量更新
-static bool ui_initialized = false;            // 界面是否已初始化（静态元素是否已绘制）
+static HANDLE hConsole = NULL;                 ///< Windows控制台句柄，用于所有控制台输出操作
+static CellType pool[POOL_HEIGHT][POOL_WIDTH]; ///< 游戏池二维数组，存储每个单元格的当前状态
+static bool dirty[POOL_HEIGHT][POOL_WIDTH];    ///< 脏标记数组，标记需要重新绘制的单元格（增量渲染）
+static GameState game;                         ///< 游戏状态实例，包含蛇、食物、分数等所有游戏数据
+static int console_width = CONSOLE_WIDTH / 2;  ///< 实际控制台宽度（字符数，考虑宽字符显示）
+static int console_height = CONSOLE_HEIGHT;    ///< 实际控制台高度（行数）
+static int last_score = -1;                    ///< 上一次绘制的得分，用于增量更新
+static int last_speed = -1;                    ///< 上一次绘制的速度，用于增量更新
+static bool ui_initialized = false;            ///< 界面是否已初始化（静态元素是否已绘制）
 
 // 函数原型声明
-static void init_game(void);                                                   // 初始化游戏状态和控制台
-static void generate_food(void);                                               // 在随机位置生成食物
-static void draw_game(void);                                                   // 绘制整个游戏界面
-static void update_game(void);                                                 // 更新游戏逻辑（蛇移动、碰撞检测等）
-static bool handle_input(void);                                                // 处理用户输入，返回false表示退出游戏
-static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); // 在控制台指定位置格式化输出
-static Direction body_type_to_direction(CellType type);                        // 将蛇身单元格类型转换为方向
-static void set_cell_type(Position pos, CellType type);                        // 设置单元格类型并标记为脏
-static CellType get_cell_type(Position pos);                                   // 获取单元格类型
+static void init_game_state(void);                                             ///< 初始化游戏状态（首次启动和重玩）
+static void generate_food(void);                                               ///< 在随机空位置生成食物
+static void draw_game(void);                                                   ///< 绘制游戏界面（增量渲染）
+static void update_game(void);                                                 ///< 更新游戏逻辑（移动、碰撞、得分）
+static bool handle_input(void);                                                ///< 处理用户输入（WASD/方向键/Q键）
+static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); ///< 在控制台指定位置格式化输出
+static Direction body_type_to_direction(CellType type);                        ///< 蛇身单元格类型转方向
+static void set_cell_type(Position pos, CellType type);                        ///< 设置单元格类型并标记脏
+static CellType get_cell_type(Position pos);                                   ///< 获取单元格类型（带边界检查）
+static void reset_game(void);                                                  ///< 重置游戏状态（用于重玩）
 
 // =============================================
 // Windows API控制台输出函数
 // =============================================
 
 /**
- * 初始化控制台环境
+ * @brief 初始化控制台环境
  *
- * 功能：获取控制台句柄、设置UTF-8编码、调整控制台窗口和缓冲区大小、隐藏光标。
+ * 获取控制台句柄、设置UTF-8编码、调整控制台窗口和缓冲区大小、隐藏光标。
  * 此函数必须在任何控制台输出操作之前调用，确保控制台处于正确的初始状态。
+ *
+ * @note 如果无法获取控制台句柄，程序将显示错误消息并退出。
  *
  * 实现步骤：
  * 1. 获取标准输出句柄
@@ -134,8 +174,6 @@ static CellType get_cell_type(Position pos);                                   /
  * 4. 设置控制台缓冲区大小（80x30）
  * 5. 设置控制台窗口大小（如果失败则尝试最大允许尺寸）
  * 6. 隐藏光标以提高视觉体验
- *
- * 注意：如果无法获取控制台句柄，程序将显示错误消息并退出。
  */
 static void init_console(void)
 {
@@ -212,28 +250,21 @@ static void init_console(void)
 }
 
 /**
- * 统一的控制台输出函数：定位、更改颜色、格式化输出
+ * @brief 统一的控制台输出函数：定位、更改颜色、格式化输出
  *
- * 功能：在控制台指定位置以指定颜色输出格式化的宽字符文本。
- * 此函数封装了控制台光标定位、颜色设置和格式化输出的完整流程。
+ * 在控制台指定位置以指定颜色输出格式化的宽字符文本。
+ * 封装了控制台光标定位、颜色设置和格式化输出的完整流程。
  *
- * 参数：
- *   @param x 输出位置的X坐标（控制台列数，0为最左侧）
- *   @param y 输出位置的Y坐标（控制台行数，0为最上方）
- *   @param attributes 文本属性（颜色、亮度等），使用Windows API的FOREGROUND_*常量组合
- *   @param fmt 格式化字符串（宽字符），支持标准printf格式说明符
- *   @param ... 可变参数列表，根据fmt中的格式说明符提供相应的参数
+ * @param x 输出位置的X坐标（控制台列数，0为最左侧，注意宽字符显示需要x*2）
+ * @param y 输出位置的Y坐标（控制台行数，0为最上方）
+ * @param attributes 文本属性（颜色、亮度等），使用Windows API的FOREGROUND_*常量组合
+ * @param fmt 格式化字符串（宽字符），支持标准printf格式说明符
+ * @param ... 可变参数列表，根据fmt中的格式说明符提供相应的参数
  *
- * 实现步骤：
- *   1. 使用SetConsoleCursorPosition将光标移动到指定位置（注意宽字符显示需要x*2）
- *   2. 使用SetConsoleTextAttribute设置文本颜色属性
- *   3. 使用vwprintf进行格式化输出（宽字符版本）
- *
- * 注意事项：
- *   - 此函数会改变光标位置和文本颜色，调用后控制台的状态会改变
- *   - 使用宽字符字符串(L"...")确保Unicode支持
- *   - 对于不需要格式化的纯文本输出，可以省略可变参数（但fmt参数仍需提供）
- *   - 由于控制台中文字符宽度为2个英文字符，X坐标需要乘以2进行显示对齐
+ * @note 此函数会改变光标位置和文本颜色，调用后控制台的状态会改变
+ * @note 使用宽字符字符串(L"...")确保Unicode支持
+ * @note 对于不需要格式化的纯文本输出，可以省略可变参数（但fmt参数仍需提供）
+ * @note 由于控制台中文字符宽度为2个英文字符，X坐标需要乘以2进行显示对齐
  */
 static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...)
 {
@@ -252,12 +283,12 @@ static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...)
 }
 
 /**
- * 清空控制台屏幕
+ * @brief 清空控制台屏幕
  *
- * 功能：清除控制台中的所有内容，并将光标重置到左上角(0,0)位置。
- * 使用系统命令"cls"实现清屏操作，然后调用set_cursor_position重置光标。
+ * 清除控制台中的所有内容，并将光标重置到左上角(0,0)位置。
+ * 使用系统命令"cls"实现清屏操作，然后设置光标位置。
  *
- * 注意：此函数会清除控制台中的所有输出，包括游戏界面。
+ * @note 此函数会清除控制台中的所有输出，包括游戏界面。
  */
 static void clear_screen(void)
 {
@@ -429,29 +460,26 @@ static CellType get_cell_type(Position pos)
 // =============================================
 
 /**
- * 初始化游戏状态
+ * @brief 初始化游戏状态（用于首次启动和重玩）
  *
- * 功能：初始化游戏的完整状态，包括控制台环境、游戏池、蛇的初始位置、食物生成等。
- * 此函数是游戏启动时必须调用的第一个函数，负责设置所有全局变量和游戏数据结构。
+ * 只初始化游戏状态，不包括控制台初始化。
+ * 用于在游戏结束后重新开始游戏，保持相同的控制台环境。
  *
  * 实现步骤：
- *   1. 初始化随机数种子（用于食物生成）
- *   2. 初始化控制台环境（编码、窗口大小、光标等）
- *   3. 初始化游戏状态变量（分数、速度、游戏结束标志）
- *   4. 初始化蛇的状态（长度、方向、初始位置）
- *   5. 初始化游戏池（清空所有单元格并设置边框）
- *   6. 在游戏池中设置蛇的初始位置（头、身、尾）
- *   7. 生成第一个食物
+ * 1. 初始化游戏状态变量（分数、速度、游戏结束标志）
+ * 2. 初始化蛇的状态（长度、方向、初始位置）
+ * 3. 初始化游戏池（清空所有单元格并设置边框）
+ * 4. 在游戏池中设置蛇的初始位置（头、身、尾）
+ * 5. 生成第一个食物
+ *
+ * @note 每次调用都会重新初始化随机数种子，确保食物生成随机性。
  */
-static void init_game(void)
+static void init_game_state(void)
 {
-    // 初始化随机数种子
+    // 重新初始化随机数种子（每次重玩都应该重新种子）
     srand((unsigned int)time(NULL) + 325u);
 
-    // 初始化控制台
-    init_console();
-
-    // 初始化游戏状态
+    // 初始化游戏状态变量
     game.score = 0;
     game.game_over = false;
     game.speed = 150; // 初始速度150毫秒
@@ -544,6 +572,15 @@ static void generate_food(void)
  */
 static void draw_game(void)
 {
+    // 游戏结束绘制状态（静态变量，需要在游戏重置时重置）
+    static bool game_over_drawn = false;
+
+    // 如果游戏没有结束但game_over_drawn为true，重置它（用于重玩）
+    if (!game.game_over && game_over_drawn)
+    {
+        game_over_drawn = false;
+    }
+
     // 如果界面未初始化，清屏并绘制静态元素
     if (!ui_initialized)
     {
@@ -562,7 +599,7 @@ static void draw_game(void)
                   L"控制: WASD 或 方向键");
         printf_at(right_info_x, info_y + 5,
                   FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-                  L"退出: ESC 或 Q");
+                  L"退出: Q键，重玩: R键");
 
         // 绘制制作人信息（静态）
         printf_at(right_info_x, info_y + 16,
@@ -615,7 +652,6 @@ static void draw_game(void)
     // 如果游戏结束，显示游戏结束信息（游戏结束时只绘制一次）
     if (game.game_over)
     {
-        static bool game_over_drawn = false;
         if (!game_over_drawn)
         {
             // 计算游戏池中心位置
@@ -630,9 +666,9 @@ static void draw_game(void)
                       FOREGROUND_GREEN | FOREGROUND_INTENSITY,
                       L"最终得分: %d", game.score);
 
-            printf_at(pool_center_x - 4, pool_center_y + 1,
+            printf_at(pool_center_x - 6, pool_center_y + 1,
                       FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-                      L"按任意键退出游戏...");
+                      L"按R键重玩游戏，按Q键退出...");
 
             game_over_drawn = true;
         }
@@ -804,20 +840,19 @@ static void update_game(void)
 }
 
 /**
- * 处理用户输入
+ * @brief 处理用户输入
  *
- * 功能：检测和处理键盘输入，支持WASD键、方向键和退出键（ESC/Q）。
- * 此函数实现输入缓冲机制，防止蛇连续转向（如直接从上转向下）。
+ * 检测和处理键盘输入，支持WASD键、方向键和退出键（ESC/Q）。
+ * 实现输入缓冲机制，防止蛇连续转向（如直接从上转向下）。
  *
  * 支持的输入：
- *   - 方向键：上(72)、下(80)、左(75)、右(77)
- *   - WASD键：W(上)、S(下)、A(左)、D(右)（不区分大小写）
- *   - 退出键：ESC(27)、Q（不区分大小写）
+ * - 方向键：上(72)、下(80)、左(75)、右(77)
+ * - WASD键：W(上)、S(下)、A(左)、D(右)（不区分大小写）
+ * - 退出键：ESC(27)、Q（不区分大小写）
  *
- * 输入缓冲机制：
- *   只允许垂直于当前方向的新方向（防止蛇直接反向移动）
- *
- * @return bool 返回true表示继续游戏，false表示退出游戏
+ * @note 输入缓冲机制：只允许垂直于当前方向的新方向（防止蛇直接反向移动）
+ * @return true 继续游戏
+ * @return false 退出游戏（用户按Q或ESC）
  */
 static bool handle_input(void)
 {
@@ -825,25 +860,25 @@ static bool handle_input(void)
     {
         int ch = _getch();
 
-        // 处理方向键（扩展键码）
+        // 处理方向键（扩展键码，0或224开头）
         if (ch == 0 || ch == 224)
         {
             ch = _getch();
             switch (ch)
             {
-            case 72: // 上箭头
+            case 72: ///< 上箭头
                 if (game.snake.direction != DIR_DOWN)
                     game.snake.next_direction = DIR_UP;
                 break;
-            case 80: // 下箭头
+            case 80: ///< 下箭头
                 if (game.snake.direction != DIR_UP)
                     game.snake.next_direction = DIR_DOWN;
                 break;
-            case 75: // 左箭头
+            case 75: ///< 左箭头
                 if (game.snake.direction != DIR_RIGHT)
                     game.snake.next_direction = DIR_LEFT;
                 break;
-            case 77: // 右箭头
+            case 77: ///< 右箭头
                 if (game.snake.direction != DIR_LEFT)
                     game.snake.next_direction = DIR_RIGHT;
                 break;
@@ -851,7 +886,7 @@ static bool handle_input(void)
         }
         else
         {
-            // 处理普通键
+            // 处理普通键（WASD、Q等）
             switch (ch)
             {
             case 'w':
@@ -886,35 +921,56 @@ static bool handle_input(void)
 }
 
 // =============================================
+// 游戏重置函数
+// =============================================
+
+/**
+ * 重置游戏状态（用于重玩）
+ *
+ * 功能：重置游戏状态到初始状态，但不重新初始化控制台。
+ * 用于在游戏结束后重新开始游戏，保持相同的控制台环境。
+ */
+static void reset_game(void)
+{
+    // 重置游戏状态但不重新初始化控制台
+    init_game_state();
+
+    // 重置UI状态
+    ui_initialized = false;
+    last_score = -1;
+    last_speed = -1;
+}
+
+// =============================================
 // 主函数
 // =============================================
 
 /**
- * 主函数
+ * @brief 主函数 - 程序入口点
  *
- * 功能：程序的入口点，控制游戏的整体流程。
- * 此函数负责初始化游戏、显示开始界面、运行游戏主循环，并在游戏结束后显示最终画面。
+ * 控制游戏的整体流程，负责初始化、游戏循环和重玩功能管理。
  *
  * 程序流程：
- *   1. 调用init_game()初始化游戏状态和控制台
- *   2. 显示开始界面（标题和提示信息）
- *   3. 等待用户按任意键开始游戏
- *   4. 游戏主循环（处理输入、更新游戏状态、绘制界面）
- *   5. 显示最终画面（包括游戏结束信息）
- *   6. 等待用户按任意键退出程序
+ * 1. 初始化控制台环境
+ * 2. 初始化游戏状态（包括随机数种子）
+ * 3. 显示开始界面（标题和提示信息）
+ * 4. 等待用户按任意键开始游戏
+ * 5. 游戏主循环（处理输入、更新游戏状态、绘制界面）
+ * 6. 游戏结束后显示最终得分和重玩选项
+ * 7. 等待用户选择重玩（R键）或退出（Q键）
  *
- * 游戏主循环：
- *   while (!game.game_over && handle_input())
- *   {
- *       update_game();  // 更新游戏逻辑
- *       draw_game();    // 绘制界面
- *       Sleep(game.speed);  // 控制游戏速度
- *   }
+ * @note 支持无限次重玩，每次重玩都会重新初始化游戏状态。
+ * @return int 程序退出码（0表示正常退出）
  */
 int main()
 {
-    // 初始化游戏
-    init_game();
+    bool play_again = true;
+
+    // 初始化控制台
+    init_console();
+
+    // 初始化游戏状态（包括随机数种子）
+    init_game_state();
 
     // 显示开始界面
     clear_screen();
@@ -926,22 +982,46 @@ int main()
               L"按任意键开始游戏...");
     _getch();
 
-    // 游戏主循环
-    while (!game.game_over && handle_input())
+    while (play_again)
     {
-        update_game();
+        // 游戏主循环
+        while (!game.game_over && handle_input())
+        {
+            update_game();
+            draw_game();
+
+            // 控制游戏速度
+            Sleep(game.speed);
+        }
+
+        // 显示最终画面（包含游戏结束信息）
         draw_game();
 
-        // 控制游戏速度
-        Sleep(game.speed);
+        // 等待用户选择重玩或退出
+        bool choice_made = false;
+        while (!choice_made)
+        {
+            if (_kbhit())
+            {
+                int ch = _getch();
+                if (ch == 'r' || ch == 'R')
+                {
+                    // 重玩游戏
+                    reset_game();
+                    choice_made = true;
+                    // play_again保持true，继续外层循环
+                }
+                else if (ch == 'q' || ch == 'Q' || ch == 27) // Q键或ESC
+                {
+                    // 退出游戏
+                    play_again = false;
+                    choice_made = true;
+                }
+                // 其他按键忽略
+            }
+            Sleep(50); // 短暂休眠，减少CPU占用
+        }
     }
-
-    // 显示最终画面
-    draw_game();
-
-    // 等待用户按键退出
-    if (!_kbhit())
-        _getch();
 
     return 0;
 }
