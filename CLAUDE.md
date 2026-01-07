@@ -1,91 +1,132 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+本文件为Claude Code（claude.ai/code）提供在此代码库中工作的指导。
 
 ## 项目概述
 
-这是一个用C语言编写的控制台贪吃蛇游戏，使用CMake构建系统。项目针对Windows平台开发，使用了Windows控制台API (`conio.h`, `windows.h`)。
+这是一个使用C语言编写的Windows控制台贪吃蛇游戏。项目使用CMake构建系统，支持x64/x86的Debug/Release构建配置。
+
+## 常用命令
+
+### 构建项目
+```bash
+# 使用CMake预设配置构建（推荐）
+cmake --preset x64-debug
+cmake --build out/build/x64-debug
+
+# 或使用传统方式
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+### 运行游戏
+```bash
+# 构建后可执行文件位于
+./out/build/x64-debug/Snake/Snake.exe
+
+# 直接运行
+./Snake/Snake.exe
+```
+
+### 清理构建
+```bash
+# 删除构建目录
+rm -rf out/build
+# 或
+cmake --build out/build/x64-debug --target clean
+```
 
 ## 构建系统
 
-项目使用CMake进行构建，支持多种配置预设（x64-debug、x64-release、x86-debug、x86-release）。
+### CMake预设配置
+项目配置了4种预设构建配置：
+- `x64-debug`: 64位Debug版本
+- `x64-release`: 64位Release版本
+- `x86-debug`: 32位Debug版本
+- `x86-release`: 32位Release版本
 
-### 常用构建命令
+使用`cmake --list-presets`查看所有可用预设。
 
-```bash
-# 配置项目（使用x64-debug预设）
-cmake --preset x64-debug
+### 编译器设置
+- 编译器：MSVC (cl.exe)
+- C标准：C11
+- 编码：UTF-8支持已启用
+- 生成器：Ninja
 
-# 构建项目
-cmake --build --preset x64-debug
+## 代码架构
 
-# 清理构建
-cmake --build --preset x64-debug --target clean
-
-# 运行游戏（构建后）
-./out/build/x64-debug/Snake/Snake.exe
-```
-
-### 构建预设
-
-- `x64-debug`: 64位调试版本
-- `x64-release`: 64位发布版本
-- `x86-debug`: 32位调试版本
-- `x86-release`: 32位发布版本
-
-构建输出目录：`out/build/${presetName}/Snake/Snake.exe`
-
-## 项目结构
-
+### 文件结构
 ```
 Snake/
-├── CMakeLists.txt              # 根CMake配置文件
-├── CMakePresets.json           # CMake预设配置
-├── README.md                   # 项目说明
-└── Snake/                      # 主源代码目录
-    ├── CMakeLists.txt          # 可执行文件配置
-    ├── Snake.h                 # 头文件（游戏数据结构、函数声明）
-    ├── Snake.c                 # 源文件（游戏逻辑实现）
-    └── Snake.exe               # 编译后的可执行文件（如果已构建）
+├── CMakeLists.txt          # 顶层CMake配置
+├── CMakePresets.json       # CMake构建预设
+├── Snake/                  # 源代码目录
+│   ├── CMakeLists.txt      # 子项目CMake配置
+│   └── Snake.c             # 主源代码文件（所有游戏逻辑）
+└── out/                    # 构建输出目录
 ```
 
-### 代码架构
+### 主要代码模块
+所有游戏逻辑集中在单个文件 `Snake/Snake.c` 中，包含以下模块：
 
-1. **数据结构**（定义在 `Snake.h`）：
-   - `Direction`: 移动方向枚举（上、下、左、右）
-   - `Position`: 二维坐标结构体
-   - `Snake`: 蛇结构体，包含身体位置数组、长度和方向
-   - `GameState`: 游戏状态结构体，包含蛇、食物、分数和游戏结束标志
+1. **控制台操作模块** (`init_console`, `set_cursor_position`, `printf_at`, `clear_screen`)
+   - 使用Windows API进行控制台图形显示
+   - 支持UTF-8编码和中文显示
+   - 提供定位输出和颜色控制功能
 
-2. **核心函数**：
-   - `init_game()`: 初始化游戏状态
-   - `generate_food()`: 随机生成食物位置
-   - `draw_game()`: 绘制游戏界面到控制台
-   - `update_game()`: 更新游戏逻辑（移动、碰撞检测、得分）
-   - `handle_input()`: 处理键盘输入（WASD、方向键）
-   - `clear_screen()`: 清空控制台屏幕（Windows API实现）
+2. **游戏池管理模块** (`pool_to_console`, `get_cell_console_position`, `draw_cell`)
+   - 管理游戏网格（20×20可玩区域+边框）
+   - 处理坐标转换（游戏池坐标↔控制台坐标）
 
-3. **主循环**（在 `main()` 函数中）：
-   - 处理输入 → 更新游戏 → 绘制界面 → 延迟循环
+3. **游戏逻辑模块** (`init_game`, `update_game`, `handle_input`, `draw_game`)
+   - 游戏状态初始化和管理
+   - 蛇移动和碰撞检测
+   - 食物生成和计分
+   - 用户输入处理（WASD/方向键控制）
+
+4. **辅助功能模块** (`get_next_position`, 各种工具函数)
+   - 方向计算和位置更新
+   - 游戏速度控制
+
+### 关键数据结构
+- `GameState`: 游戏状态（分数、速度、游戏结束标志）
+- `Position`: 二维坐标位置
+- `Direction`: 方向枚举（上、下、左、右）
+- `CellType`: 单元格类型（空、食物、蛇头、蛇身、蛇尾、墙壁）
+
+### 全局变量
+- `pool[POOL_HEIGHT][POOL_WIDTH]`: 游戏池网格
+- `game`: 当前游戏状态
+- `hConsole`: Windows控制台句柄
+- `console_width`, `console_height`: 控制台尺寸
+
+## 平台依赖
+
+### Windows专用API
+项目使用以下Windows特有头文件：
+- `<windows.h>`: Windows API
+- `<conio.h>`: 控制台输入输出
+- 其他标准C库头文件
+
+### Unicode支持
+- 使用宽字符（`wchar_t`）和宽字符串（`L"..."`）
+- 设置控制台代码页为UTF-8
+- 配置区域设置为`zh_CN.UTF-8`
 
 ## 开发注意事项
 
-1. **平台依赖**：项目使用Windows特有的API（`conio.h`、`windows.h`、`Sleep()`、`_kbhit()`、`_getch()`），不直接支持其他操作系统。
-
-2. **编码设置**：主函数中设置了控制台代码页为UTF-8（65001）以支持中文显示。
-
-3. **游戏参数**：游戏区域大小在 `Snake.h` 中通过 `WIDTH` 和 `HEIGHT` 宏定义（默认20×20）。
-
-4. **构建要求**：需要Windows平台、CMake 3.10+、MSVC编译器（cl.exe）或兼容的C编译器。
-
-## 测试
-
-项目目前没有包含自动化测试。游戏功能通过运行可执行文件进行手动测试。
+1. **平台限制**: 代码仅适用于Windows平台，使用Windows API和MSVC编译器。
+2. **单一文件架构**: 所有代码在一个文件中，便于理解和修改。
+3. **控制台图形**: 使用控制台API实现简单的图形界面，非GUI应用。
+4. **构建配置**: 使用CMake预设简化构建过程，支持多种架构和配置。
+5. **编码规范**: 代码使用中文注释和变量名，注意UTF-8编码一致性。
 
 ## 扩展建议
 
-如需添加新功能或修改现有代码：
-1. 游戏逻辑集中在 `Snake.c` 的 `update_game()` 函数中
-2. 渲染逻辑在 `draw_game()` 函数中
-3. 输入处理在 `handle_input()` 函数中
-4. 数据结构在 `Snake.h` 中定义
+如需扩展项目，可考虑：
+1. 拆分头文件和源文件以提高模块性
+2. 添加跨平台支持（如使用ncurses等库）
+3. 实现游戏难度级别和更多游戏模式
+4. 添加单元测试框架
+5. 改进图形显示（如使用更丰富的字符图形）
