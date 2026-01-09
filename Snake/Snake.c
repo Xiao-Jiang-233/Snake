@@ -22,32 +22,32 @@
 // =============================================
 
 // 游戏区域大小（内部可玩区域，不包含边框）
-#define GAME_WIDTH 20                  // 游戏区域宽度（单元格数）
-#define GAME_HEIGHT 20                 // 游戏区域高度（单元格数）
+#define GAME_WIDTH 20  // 游戏区域宽度（单元格数）
+#define GAME_HEIGHT 20 // 游戏区域高度（单元格数）
 
 // 游戏池大小（包括边框）
-#define POOL_WIDTH (GAME_WIDTH + 2)    // 游戏池宽度 = 游戏宽度 + 左右边框
-#define POOL_HEIGHT (GAME_HEIGHT + 2)  // 游戏池高度 = 游戏高度 + 上下边框
+#define POOL_WIDTH (GAME_WIDTH + 2)   // 游戏池宽度 = 游戏宽度 + 左右边框
+#define POOL_HEIGHT (GAME_HEIGHT + 2) // 游戏池高度 = 游戏高度 + 上下边框
 
 // 控制台显示相关常量
-#define CONSOLE_WIDTH 80               // 控制台缓冲区宽度（字符数）
-#define CONSOLE_HEIGHT 30              // 控制台缓冲区高度（行数）
+#define CONSOLE_WIDTH 80  // 控制台缓冲区宽度（字符数）
+#define CONSOLE_HEIGHT 30 // 控制台缓冲区高度（行数）
 
 // 游戏区域在控制台中的起始位置（左上角坐标）
-#define GAME_AREA_X 8                  // 游戏区域起始X坐标（列数）
-#define GAME_AREA_Y 4                  // 游戏区域起始Y坐标（行数）
+#define GAME_AREA_X 8 // 游戏区域起始X坐标（列数）
+#define GAME_AREA_Y 4 // 游戏区域起始Y坐标（行数）
 
 // 游戏标题
-#define GAME_TITLE L"贪吃蛇游戏 - 文字版"  // 游戏标题（宽字符字符串）
-#define GAME_TITLE_LENGTH 10               // 标题字符数（用于居中计算）
+#define GAME_TITLE L"贪吃蛇游戏 - 文字版" // 游戏标题（宽字符字符串）
+#define GAME_TITLE_LENGTH 10              // 标题字符数（用于居中计算）
 
 // 方向枚举 - 表示蛇的移动方向
 typedef enum
 {
-    DIR_UP,      // 向上移动
-    DIR_DOWN,    // 向下移动
-    DIR_LEFT,    // 向左移动
-    DIR_RIGHT    // 向右移动
+    DIR_UP,   // 向上移动
+    DIR_DOWN, // 向下移动
+    DIR_LEFT, // 向左移动
+    DIR_RIGHT // 向右移动
 } Direction;
 
 // 游戏池单元格类型 - 表示游戏网格中每个单元格的状态
@@ -67,8 +67,8 @@ typedef enum
 // 位置结构体 - 表示二维坐标系中的点（用于游戏池和控制台坐标）
 typedef struct
 {
-    int x;  // X坐标（水平方向）
-    int y;  // Y坐标（垂直方向）
+    int x; // X坐标（水平方向）
+    int y; // Y坐标（垂直方向）
 } Position;
 
 // 蛇结构体 - 简化版本，只存储头尾位置（基于链表思想，但仅记录关键位置）
@@ -79,16 +79,17 @@ typedef struct
     int length;               // 蛇的长度（包括头、身、尾）
     Direction direction;      // 当前移动方向（正在执行的方向）
     Direction next_direction; // 下一个方向（用于输入缓冲，防止连续转向）
+    Direction tail_direction; // 蛇尾移动方向（用于更新蛇尾位置）
 } Snake;
 
 // 游戏状态结构体 - 包含游戏运行所需的所有状态信息
 typedef struct
 {
-    Snake snake;          // 蛇的状态（位置、长度、方向等）
-    Position food;        // 食物位置
-    int score;            // 当前得分
-    bool game_over;       // 游戏结束标志（true表示游戏结束）
-    int speed;            // 游戏速度（毫秒，控制蛇移动的延迟时间）
+    Snake snake;    // 蛇的状态（位置、长度、方向等）
+    Position food;  // 食物位置
+    int score;      // 当前得分
+    bool game_over; // 游戏结束标志（true表示游戏结束）
+    int speed;      // 游戏速度（毫秒，控制蛇移动的延迟时间）
 } GameState;
 
 // =============================================
@@ -102,13 +103,14 @@ static int console_width = CONSOLE_WIDTH / 2;  // 实际控制台宽度（字符
 static int console_height = CONSOLE_HEIGHT;    // 实际控制台高度（行数）
 
 // 函数原型声明
-static void init_game(void);                               // 初始化游戏状态和控制台
-static void generate_food(void);                           // 在随机位置生成食物
-static void draw_game(void);                               // 绘制整个游戏界面
-static void update_game(void);                             // 更新游戏逻辑（蛇移动、碰撞检测等）
-static bool handle_input(void);                            // 处理用户输入，返回false表示退出游戏
+static void init_game(void);                                                   // 初始化游戏状态和控制台
+static void generate_food(void);                                               // 在随机位置生成食物
+static void draw_game(void);                                                   // 绘制整个游戏界面
+static void update_game(void);                                                 // 更新游戏逻辑（蛇移动、碰撞检测等）
+static bool handle_input(void);                                                // 处理用户输入，返回false表示退出游戏
 static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); // 在控制台指定位置格式化输出
-static Position get_next_position(Position pos);           // 根据当前位置类型获取下一个位置（用于蛇尾移动）
+static Position get_next_position(Position pos);                               // 根据当前位置类型获取下一个位置（用于蛇尾移动）
+static Direction body_type_to_direction(CellType type);                       // 将蛇身单元格类型转换为方向
 
 // =============================================
 // Windows API控制台输出函数
@@ -476,6 +478,7 @@ static void init_game(void)
     game.snake.length = 3;
     game.snake.direction = DIR_RIGHT;
     game.snake.next_direction = DIR_RIGHT;
+    game.snake.tail_direction = DIR_RIGHT;
 
     // 蛇的初始位置（在游戏区域中央）
     int start_x = POOL_WIDTH / 2;
@@ -653,6 +656,15 @@ static CellType direction_to_body_type(Direction dir)
     }
 }
 
+static Direction body_type_to_direction(CellType type)
+{
+    if (type >= CELL_SNAKE_BODY_UP && type <= CELL_SNAKE_BODY_RIGHT)
+    {
+        return (Direction)(type - CELL_SNAKE_BODY_UP);
+    }
+    return DIR_RIGHT; // 默认
+}
+
 /**
  * 更新游戏逻辑 - 新版本，只使用头尾位置
  *
@@ -705,8 +717,7 @@ static void update_game(void)
     // 检查碰撞
     CellType cell_ahead = get_cell_type(new_head.x, new_head.y);
 
-    if (cell_ahead == CELL_WALL || cell_ahead == CELL_SNAKE_BODY_UP || cell_ahead == CELL_SNAKE_BODY_DOWN ||
-        cell_ahead == CELL_SNAKE_BODY_LEFT || cell_ahead == CELL_SNAKE_BODY_RIGHT || cell_ahead == CELL_SNAKE_TAIL)
+    if (cell_ahead != CELL_EMPTY && cell_ahead != CELL_FOOD)
     {
         // 撞墙或撞到自己身体，游戏结束
         game.game_over = true;
@@ -720,17 +731,41 @@ static void update_game(void)
     if (!ate_food)
     {
         // 没吃到食物，需要移动蛇尾
-        // 先找到蛇尾的前一个位置（沿着蛇身向头部方向）
-        Position next_from_tail = get_next_position(game.snake.tail);
+        // 根据蛇尾方向计算下一个位置
+        Position next_tail = game.snake.tail;
+        switch (game.snake.tail_direction)
+        {
+        case DIR_UP:
+            next_tail.y--;
+            break;
+        case DIR_DOWN:
+            next_tail.y++;
+            break;
+        case DIR_LEFT:
+            next_tail.x--;
+            break;
+        case DIR_RIGHT:
+            next_tail.x++;
+            break;
+        }
+
+        // 获取下一个位置的单元格类型（应该是蛇身）
+        CellType next_cell_type = get_cell_type(next_tail.x, next_tail.y);
+
+        // 如果下一个位置是蛇身，更新蛇尾方向为该蛇身的方向
+        if (next_cell_type >= CELL_SNAKE_BODY_UP && next_cell_type <= CELL_SNAKE_BODY_RIGHT)
+        {
+            game.snake.tail_direction = body_type_to_direction(next_cell_type);
+        }
 
         // 清除当前蛇尾
         set_cell_type(game.snake.tail.x, game.snake.tail.y, CELL_EMPTY);
 
-        // 将前一个位置设为新的蛇尾
-        set_cell_type(next_from_tail.x, next_from_tail.y, CELL_SNAKE_TAIL);
+        // 将下一个位置设为新的蛇尾
+        set_cell_type(next_tail.x, next_tail.y, CELL_SNAKE_TAIL);
 
         // 更新蛇尾位置
-        game.snake.tail = next_from_tail;
+        game.snake.tail = next_tail;
     }
     else
     {
