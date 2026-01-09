@@ -53,15 +53,15 @@ typedef enum
 // 游戏池单元格类型 - 表示游戏网格中每个单元格的状态
 typedef enum
 {
-    CELL_EMPTY,            // 空单元格（可通行区域）
-    CELL_FOOD,             // 食物（蛇的目标）
-    CELL_SNAKE_HEAD,       // 蛇头（蛇的头部，控制移动方向）
-    CELL_SNAKE_BODY_UP,    // 蛇身（向上移动方向）
-    CELL_SNAKE_BODY_DOWN,  // 蛇身（向下移动方向）
-    CELL_SNAKE_BODY_LEFT,  // 蛇身（向左移动方向）
-    CELL_SNAKE_BODY_RIGHT, // 蛇身（向右移动方向）
-    CELL_SNAKE_TAIL,       // 蛇尾（蛇的尾部，最后一段）
-    CELL_WALL              // 墙壁（不可通行的边界）
+    CELL_EMPTY = -0x66,         // 空单元格（可通行区域）
+    CELL_FOOD = 0xcc,           // 食物（蛇的目标）
+    CELL_SNAKE_HEAD = 0xff,     // 蛇头（蛇的头部，控制移动方向）
+    CELL_SNAKE_BODY_UP = 0x0,   // 蛇身（向上移动方向）
+    CELL_SNAKE_BODY_DOWN,       // 蛇身（向下移动方向）
+    CELL_SNAKE_BODY_LEFT,       // 蛇身（向左移动方向）
+    CELL_SNAKE_BODY_RIGHT,      // 蛇身（向右移动方向）
+    CELL_SNAKE_TAIL = 0x66ccff, // 蛇尾（蛇的尾部，最后一段）
+    CELL_WALL = 0x325           // 墙壁（不可通行的边界）
 } CellType;
 
 // 位置结构体 - 表示二维坐标系中的点（用于游戏池和控制台坐标）
@@ -109,8 +109,7 @@ static void draw_game(void);                                                   /
 static void update_game(void);                                                 // 更新游戏逻辑（蛇移动、碰撞检测等）
 static bool handle_input(void);                                                // 处理用户输入，返回false表示退出游戏
 static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); // 在控制台指定位置格式化输出
-static Position get_next_position(Position pos);                               // 根据当前位置类型获取下一个位置（用于蛇尾移动）
-static Direction body_type_to_direction(CellType type);                       // 将蛇身单元格类型转换为方向
+static Direction body_type_to_direction(CellType type);                        // 将蛇身单元格类型转换为方向
 
 // =============================================
 // Windows API控制台输出函数
@@ -198,12 +197,6 @@ static void init_console(void)
         windowSize.Bottom = requestedHeight - 1;
         SetConsoleWindowInfo(hConsole, TRUE, &windowSize);
 
-        // 如果窗口尺寸小于预期，可能需要调整游戏布局
-        if (requestedWidth < CONSOLE_WIDTH || requestedHeight < CONSOLE_HEIGHT)
-        {
-            // 这里可以添加逻辑来调整游戏显示位置
-            // 目前只是简单记录
-        }
     }
 
     // 隐藏光标
@@ -213,20 +206,6 @@ static void init_console(void)
     SetConsoleCursorInfo(hConsole, &cursorInfo);
 }
 
-/**
- * 设置控制台光标位置
- *
- * 功能：将控制台光标移动到指定的(x, y)坐标位置。
- * 使用Windows API的SetConsoleCursorPosition函数实现。
- *
- * @param x 目标位置的X坐标（列数，0为最左侧）
- * @param y 目标位置的Y坐标（行数，0为最上方）
- */
-static void set_cursor_position(int x, int y)
-{
-    COORD coord = {x, y};
-    SetConsoleCursorPosition(hConsole, coord);
-}
 
 /**
  * 统一的控制台输出函数：定位、更改颜色、格式化输出
@@ -281,7 +260,8 @@ static void clear_screen(void)
     // 使用系统命令清屏
     system("cls");
     // 设置光标到左上角
-    set_cursor_position(0, 0);
+    COORD coord = {0, 0};
+    SetConsoleCursorPosition(hConsole, coord);
 }
 
 // =============================================
@@ -876,94 +856,7 @@ static bool handle_input(void)
     return true; // 继续游戏
 }
 
-// =============================================
-// 辅助函数：根据位置获取下一个位置
-// =============================================
 
-/**
- * 根据当前位置的类型获取下一个位置
- *
- * 功能：根据指定位置的单元格类型，确定沿着蛇身方向的下一个位置。
- * 此函数主要用于在蛇移动时找到蛇尾的下一个位置（当蛇没有吃到食物时）。
- *
- * 处理逻辑：
- *   - CELL_SNAKE_HEAD: 根据当前蛇移动方向确定下一个位置
- *   - CELL_SNAKE_BODY_*: 根据身体部分的方向（向上/下/左/右）移动
- *   - CELL_SNAKE_TAIL: 检查四个方向，找到相邻的蛇身部分来确定移动方向
- *   - 其他类型: 位置保持不变
- *
- * @param pos 当前位置（游戏池坐标）
- * @return Position 沿着蛇身方向的下一个位置
- */
-static Position get_next_position(Position pos)
-{
-    Position next = pos;
-    CellType cell = get_cell_type(pos.x, pos.y);
-
-    switch (cell)
-    {
-    case CELL_SNAKE_HEAD:
-        // 蛇头根据当前方向移动
-        switch (game.snake.direction)
-        {
-        case DIR_UP:
-            next.y--;
-            break;
-        case DIR_DOWN:
-            next.y++;
-            break;
-        case DIR_LEFT:
-            next.x--;
-            break;
-        case DIR_RIGHT:
-            next.x++;
-            break;
-        }
-        break;
-
-    case CELL_SNAKE_BODY_UP:
-        next.y--; // 向上移动
-        break;
-    case CELL_SNAKE_BODY_DOWN:
-        next.y++; // 向下移动
-        break;
-    case CELL_SNAKE_BODY_LEFT:
-        next.x--; // 向左移动
-        break;
-    case CELL_SNAKE_BODY_RIGHT:
-        next.x++; // 向右移动
-        break;
-
-    case CELL_SNAKE_TAIL:
-        // 蛇尾需要找到相邻的蛇身来确定方向
-        // 检查四个方向，找到任何类型的蛇身部分
-        CellType left_cell = get_cell_type(pos.x - 1, pos.y);
-        CellType right_cell = get_cell_type(pos.x + 1, pos.y);
-        CellType up_cell = get_cell_type(pos.x, pos.y - 1);
-        CellType down_cell = get_cell_type(pos.x, pos.y + 1);
-
-        // 检查是否是蛇身（任何方向）
-        if (left_cell == CELL_SNAKE_BODY_UP || left_cell == CELL_SNAKE_BODY_DOWN ||
-            left_cell == CELL_SNAKE_BODY_LEFT || left_cell == CELL_SNAKE_BODY_RIGHT)
-            next.x--; // 左边有蛇身，蛇尾向左移动
-        else if (right_cell == CELL_SNAKE_BODY_UP || right_cell == CELL_SNAKE_BODY_DOWN ||
-                 right_cell == CELL_SNAKE_BODY_LEFT || right_cell == CELL_SNAKE_BODY_RIGHT)
-            next.x++; // 右边有蛇身，蛇尾向右移动
-        else if (up_cell == CELL_SNAKE_BODY_UP || up_cell == CELL_SNAKE_BODY_DOWN ||
-                 up_cell == CELL_SNAKE_BODY_LEFT || up_cell == CELL_SNAKE_BODY_RIGHT)
-            next.y--; // 上方有蛇身，蛇尾向上移动
-        else if (down_cell == CELL_SNAKE_BODY_UP || down_cell == CELL_SNAKE_BODY_DOWN ||
-                 down_cell == CELL_SNAKE_BODY_LEFT || down_cell == CELL_SNAKE_BODY_RIGHT)
-            next.y++; // 下方有蛇身，蛇尾向下移动
-        break;
-
-    default:
-        // 对于其他类型，位置不变
-        break;
-    }
-
-    return next;
-}
 
 // =============================================
 // 主函数
