@@ -494,33 +494,8 @@ static void init_game(void)
     // 设置蛇头
     set_cell_type(game.snake.head.x, game.snake.head.y, CELL_SNAKE_HEAD);
 
-    // 设置蛇身（从头到尾，每个部分指向下一个更靠近头部的部分）
-    Position prev = game.snake.head; // 前一个部分（更靠近头部）
-    for (int i = 1; i < game.snake.length - 1; i++)
-    {
-        Position current;
-        current.x = start_x - i;
-        current.y = start_y;
-
-        // 设置当前身体部分的方向（指向prev）
-        CellType body_type;
-        if (prev.x == current.x)
-        {
-            if (prev.y < current.y) // prev在上方，所以当前向下移动
-                body_type = CELL_SNAKE_BODY_DOWN;
-            else // prev在下方，当前向上移动
-                body_type = CELL_SNAKE_BODY_UP;
-        }
-        else // prev.y == current.y
-        {
-            if (prev.x < current.x) // prev在左边，所以当前向右移动
-                body_type = CELL_SNAKE_BODY_RIGHT;
-            else // prev在右边，当前向左移动
-                body_type = CELL_SNAKE_BODY_LEFT;
-        }
-        set_cell_type(current.x, current.y, body_type);
-        prev = current;
-    }
+    // 设置蛇身
+    set_cell_type(game.snake.head.x - 1, game.snake.head.y, CELL_SNAKE_BODY_RIGHT);
 
     // 设置蛇尾
     set_cell_type(game.snake.tail.x, game.snake.tail.y, CELL_SNAKE_TAIL);
