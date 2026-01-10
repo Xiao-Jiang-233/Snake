@@ -98,9 +98,13 @@ typedef struct
 
 static HANDLE hConsole = NULL;                 // Windows控制台句柄，用于所有控制台输出操作
 static CellType pool[POOL_HEIGHT][POOL_WIDTH]; // 游戏池二维数组，存储每个单元格的当前状态
+static bool dirty[POOL_HEIGHT][POOL_WIDTH];    // 脏标记数组，标记需要重新绘制的单元格
 static GameState game;                         // 游戏状态实例，包含蛇、食物、分数等所有游戏数据
 static int console_width = CONSOLE_WIDTH / 2;  // 实际控制台宽度（字符数，考虑宽字符显示）
 static int console_height = CONSOLE_HEIGHT;    // 实际控制台高度（行数）
+static int last_score = -1;                    // 上一次绘制的得分，用于增量更新
+static int last_speed = -1;                    // 上一次绘制的速度，用于增量更新
+static bool ui_initialized = false;            // 界面是否已初始化（静态元素是否已绘制）
 
 // 函数原型声明
 static void init_game(void);                                                   // 初始化游戏状态和控制台
@@ -110,6 +114,8 @@ static void update_game(void);                                                 /
 static bool handle_input(void);                                                // 处理用户输入，返回false表示退出游戏
 static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); // 在控制台指定位置格式化输出
 static Direction body_type_to_direction(CellType type);                        // 将蛇身单元格类型转换为方向
+static void set_cell_type(Position pos, CellType type);                        // 设置单元格类型并标记为脏
+static CellType get_cell_type(Position pos);                                   // 获取单元格类型
 
 // =============================================
 // Windows API控制台输出函数
@@ -365,19 +371,20 @@ static void init_pool(void)
         for (int x = 0; x < POOL_WIDTH; x++)
         {
             pool[y][x] = CELL_EMPTY;
+            dirty[y][x] = false;
         }
     }
 
     // 设置墙壁
     for (int x = 0; x < POOL_WIDTH; x++)
     {
-        pool[0][x] = CELL_WALL;               // 上边框
-        pool[POOL_HEIGHT - 1][x] = CELL_WALL; // 下边框
+        set_cell_type((Position){x, 0}, CELL_WALL);               // 上边框
+        set_cell_type((Position){x, POOL_HEIGHT - 1}, CELL_WALL); // 下边框
     }
     for (int y = 0; y < POOL_HEIGHT; y++)
     {
-        pool[y][0] = CELL_WALL;              // 左边框
-        pool[y][POOL_WIDTH - 1] = CELL_WALL; // 右边框
+        set_cell_type((Position){0, y}, CELL_WALL);              // 左边框
+        set_cell_type((Position){POOL_WIDTH - 1, y}, CELL_WALL); // 右边框
     }
 }
 
@@ -395,6 +402,7 @@ static void set_cell_type(Position pos, CellType type)
     if (pos.x >= 0 && pos.x < POOL_WIDTH && pos.y >= 0 && pos.y < POOL_HEIGHT)
     {
         pool[pos.y][pos.x] = type;
+        dirty[pos.y][pos.x] = true;
     }
 }
 
@@ -446,7 +454,7 @@ static void init_game(void)
     // 初始化游戏状态
     game.score = 0;
     game.game_over = false;
-    game.speed = 120; // 初始速度120毫秒
+    game.speed = 150; // 初始速度150毫秒
 
     // 初始化蛇
     game.snake.length = 3;
@@ -455,7 +463,7 @@ static void init_game(void)
     game.snake.tail_direction = DIR_RIGHT;
 
     // 蛇的初始位置（在游戏区域中央）
-    int start_x = POOL_WIDTH / 2;
+    int start_x = POOL_WIDTH / 2 + 1;
     int start_y = POOL_HEIGHT / 2;
 
     // 设置蛇头和蛇尾位置
@@ -536,20 +544,51 @@ static void generate_food(void)
  */
 static void draw_game(void)
 {
-    // 清空控制台
-    clear_screen();
+    // 如果界面未初始化，清屏并绘制静态元素
+    if (!ui_initialized)
+    {
+        // 清空控制台
+        clear_screen();
 
-    // 绘制标题（console_width是字符数，直接计算居中位置）
-    printf_at((console_width - GAME_TITLE_LENGTH) / 2, 1, FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-              GAME_TITLE);
+        // 绘制标题（console_width是字符数，直接计算居中位置）
+        printf_at((console_width - GAME_TITLE_LENGTH) / 2, 1, FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  GAME_TITLE);
 
-    // 绘制游戏池
+        // 绘制控制说明（静态，只需要绘制一次）
+        int right_info_x = console_width / 2 + 9;
+        int info_y = GAME_AREA_Y + 2;
+        printf_at(right_info_x, info_y + 4,
+                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"控制: WASD 或 方向键");
+        printf_at(right_info_x, info_y + 5,
+                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"退出: ESC 或 Q");
+
+        // 绘制制作人信息（静态）
+        printf_at(right_info_x, info_y + 16,
+                  FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                  L"制作: 刘庆棋");
+        printf_at(right_info_x, info_y + 17,
+                  FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                  L"      宫子涵");
+        printf_at(right_info_x, info_y + 18,
+                  FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                  L"      贾国威");
+
+        ui_initialized = true;
+    }
+
+    // 绘制游戏池中所有脏单元格
     for (int y = 0; y < POOL_HEIGHT; y++)
     {
         for (int x = 0; x < POOL_WIDTH; x++)
         {
-            Position pos = {x, y};
-            draw_cell(pos);
+            if (dirty[y][x])
+            {
+                Position pos = {x, y};
+                draw_cell(pos);
+                dirty[y][x] = false;
+            }
         }
     }
 
@@ -557,51 +596,46 @@ static void draw_game(void)
     int right_info_x = console_width / 2 + 9;
     int info_y = GAME_AREA_Y + 2;
 
-    // 绘制分数信息
-    printf_at(right_info_x, info_y + 0, FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-              L"得分: %d", game.score);
+    // 如果分数变化，更新分数信息
+    if (game.score != last_score)
+    {
+        printf_at(right_info_x, info_y + 0, FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"得分: %d", game.score);
+        last_score = game.score;
+    }
 
-    // 绘制速度信息
-    printf_at(right_info_x, info_y + 1, FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-              L"速度: %dms", game.speed);
+    // 如果速度变化，更新速度信息
+    if (game.speed != last_speed)
+    {
+        printf_at(right_info_x, info_y + 1, FOREGROUND_BLUE | FOREGROUND_INTENSITY,
+                  L"速度: %dms", game.speed);
+        last_speed = game.speed;
+    }
 
-    // 绘制控制说明
-    printf_at(right_info_x, info_y + 4,
-              FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-              L"控制: WASD 或 方向键");
-    printf_at(right_info_x, info_y + 5,
-              FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-              L"退出: ESC 或 Q");
-
-    // 绘制制作人信息
-    printf_at(right_info_x, info_y + 16,
-              FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-              L"制作: 刘庆棋");
-    printf_at(right_info_x, info_y + 17,
-              FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-              L"      宫子涵");
-    printf_at(right_info_x, info_y + 18,
-              FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-              L"      贾国威");
-
-    // 如果游戏结束，显示游戏结束信息
+    // 如果游戏结束，显示游戏结束信息（游戏结束时只绘制一次）
     if (game.game_over)
     {
-        // 计算游戏池中心位置
-        int pool_center_x = GAME_AREA_X + POOL_WIDTH / 2;
-        int pool_center_y = GAME_AREA_Y + POOL_HEIGHT / 2;
+        static bool game_over_drawn = false;
+        if (!game_over_drawn)
+        {
+            // 计算游戏池中心位置
+            int pool_center_x = GAME_AREA_X + POOL_WIDTH / 2;
+            int pool_center_y = GAME_AREA_Y + POOL_HEIGHT / 2;
 
-        printf_at(pool_center_x - 2, pool_center_y - 1,
-                  FOREGROUND_RED | FOREGROUND_INTENSITY,
-                  L"游戏结束！");
+            printf_at(pool_center_x - 2, pool_center_y - 1,
+                      FOREGROUND_RED | FOREGROUND_INTENSITY,
+                      L"游戏结束！");
 
-        printf_at(pool_center_x - 3, pool_center_y,
-                  FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-                  L"最终得分: %d", game.score);
+            printf_at(pool_center_x - 3, pool_center_y,
+                      FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                      L"最终得分: %d", game.score);
 
-        printf_at(pool_center_x - 4, pool_center_y + 1,
-                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
-                  L"按任意键退出游戏...");
+            printf_at(pool_center_x - 4, pool_center_y + 1,
+                      FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE,
+                      L"按任意键退出游戏...");
+
+            game_over_drawn = true;
+        }
     }
 }
 
