@@ -32,24 +32,24 @@
 // =============================================
 
 // 游戏区域尺寸（内部可玩区域，不包含边框）
-#define GAME_WIDTH   20  ///< 游戏区域宽度（单元格数）
-#define GAME_HEIGHT  20  ///< 游戏区域高度（单元格数）
+#define GAME_WIDTH 20  ///< 游戏区域宽度（单元格数）
+#define GAME_HEIGHT 20 ///< 游戏区域高度（单元格数）
 
 // 游戏池尺寸（包括边框）
-#define POOL_WIDTH   (GAME_WIDTH + 2)   ///< 游戏池宽度 = 游戏宽度 + 左右边框
-#define POOL_HEIGHT  (GAME_HEIGHT + 2)  ///< 游戏池高度 = 游戏高度 + 上下边框
+#define POOL_WIDTH (GAME_WIDTH + 2)   ///< 游戏池宽度 = 游戏宽度 + 左右边框
+#define POOL_HEIGHT (GAME_HEIGHT + 2) ///< 游戏池高度 = 游戏高度 + 上下边框
 
 // 控制台显示常量
-#define CONSOLE_WIDTH   80  ///< 控制台缓冲区宽度（字符数）
-#define CONSOLE_HEIGHT  30  ///< 控制台缓冲区高度（行数）
+#define CONSOLE_WIDTH 80  ///< 控制台缓冲区宽度（字符数）
+#define CONSOLE_HEIGHT 30 ///< 控制台缓冲区高度（行数）
 
 // 游戏区域在控制台中的起始位置（左上角坐标）
-#define GAME_AREA_X  8  ///< 游戏区域起始X坐标（控制台列数）
-#define GAME_AREA_Y  4  ///< 游戏区域起始Y坐标（控制台行数）
+#define GAME_AREA_X 8 ///< 游戏区域起始X坐标（控制台列数）
+#define GAME_AREA_Y 4 ///< 游戏区域起始Y坐标（控制台行数）
 
 // 游戏标题
-#define GAME_TITLE       L"贪吃蛇游戏 - 文字版"  ///< 游戏标题（宽字符字符串）
-#define GAME_TITLE_LENGTH  10                    ///< 标题字符数（用于居中计算）
+#define GAME_TITLE L"贪吃蛇游戏 - 文字版" ///< 游戏标题（宽字符字符串）
+#define GAME_TITLE_LENGTH 10              ///< 标题字符数（用于居中计算）
 
 /**
  * @enum Direction
@@ -59,10 +59,10 @@
  */
 typedef enum
 {
-    DIR_UP,      ///< 向上移动
-    DIR_DOWN,    ///< 向下移动
-    DIR_LEFT,    ///< 向左移动
-    DIR_RIGHT    ///< 向右移动
+    DIR_UP,   ///< 向上移动
+    DIR_DOWN, ///< 向下移动
+    DIR_LEFT, ///< 向左移动
+    DIR_RIGHT ///< 向右移动
 } Direction;
 
 /**
@@ -126,6 +126,7 @@ typedef struct
     Position food;  ///< 食物位置
     int score;      ///< 当前得分
     bool game_over; ///< 游戏结束标志（true表示游戏结束）
+    bool paused;    ///< 游戏暂停标志（true表示游戏暂停）
     int speed;      ///< 游戏速度（毫秒，控制蛇移动的延迟时间）
 } GameState;
 
@@ -141,6 +142,7 @@ static int console_width = CONSOLE_WIDTH / 2;  ///< 实际控制台宽度（字�
 static int console_height = CONSOLE_HEIGHT;    ///< 实际控制台高度（行数）
 static int last_score = -1;                    ///< 上一次绘制的得分，用于增量更新
 static int last_speed = -1;                    ///< 上一次绘制的速度，用于增量更新
+static bool last_paused = true;                ///< 上一次绘制的暂停状态，用于增量更新（初始为true确保第一次绘制）
 static bool ui_initialized = false;            ///< 界面是否已初始化（静态元素是否已绘制）
 
 // =============================================
@@ -500,6 +502,7 @@ static void init_game_state(void)
     // 初始化游戏状态变量
     game.score = 0;
     game.game_over = false;
+    game.paused = false;
     game.speed = 150; // 初始速度150毫秒
 
     // 初始化蛇
@@ -618,6 +621,9 @@ static void draw_game(void)
         printf_at(right_info_x, info_y + 5,
                   FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
                   L"退出: Q键，重玩: R键");
+        printf_at(right_info_x, info_y + 6,
+                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"暂停: 空格键或P键");
 
         // 绘制制作人信息（静态）
         printf_at(right_info_x, info_y + 16,
@@ -665,6 +671,14 @@ static void draw_game(void)
         printf_at(right_info_x, info_y + 1, FOREGROUND_BLUE | FOREGROUND_INTENSITY,
                   L"速度: %dms", game.speed);
         last_speed = game.speed;
+    }
+
+    // 如果暂停状态变化，更新暂停信息
+    if (game.paused != last_paused)
+    {
+        printf_at(right_info_x, info_y + 2, game.paused ? FOREGROUND_RED | FOREGROUND_INTENSITY : FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"状态: %ls", game.paused ? L"暂停  " : L"进行中");
+        last_paused = game.paused;
     }
 
     // 如果游戏结束，显示游戏结束信息（游戏结束时只绘制一次）
@@ -927,6 +941,15 @@ static bool handle_input(void)
                 if (game.snake.direction != DIR_LEFT)
                     game.snake.next_direction = DIR_RIGHT;
                 break;
+            case ' ':
+            case 'p':
+            case 'P':
+                // 切换暂停状态（只有在游戏未结束时）
+                if (!game.game_over)
+                {
+                    game.paused = !game.paused;
+                }
+                break;
             case 'q':
             case 'Q':
             case 27:          // ESC
@@ -957,6 +980,7 @@ static void reset_game(void)
     ui_initialized = false;
     last_score = -1;
     last_speed = -1;
+    last_paused = true;
 }
 
 // =============================================
@@ -1005,11 +1029,14 @@ int main()
         // 游戏主循环
         while (!game.game_over && handle_input())
         {
-            update_game();
+            if (!game.paused)
+            {
+                update_game();
+            }
             draw_game();
 
-            // 控制游戏速度
-            Sleep(game.speed);
+            // 控制游戏速度（暂停时使用较短的延迟以减少CPU占用）
+            Sleep(game.paused ? 50 : game.speed);
         }
 
         // 显示最终画面（包含游戏结束信息）
