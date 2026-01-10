@@ -122,12 +122,13 @@ typedef struct
  */
 typedef struct
 {
-    Snake snake;    ///< 蛇的状态（位置、长度、方向等）
-    Position food;  ///< 食物位置
-    int score;      ///< 当前得分
-    bool game_over; ///< 游戏结束标志（true表示游戏结束）
-    bool paused;    ///< 游戏暂停标志（true表示游戏暂停）
-    int speed;      ///< 游戏速度（毫秒，控制蛇移动的延迟时间）
+    Snake snake;       ///< 蛇的状态（位置、长度、方向等）
+    Position food;     ///< 食物位置
+    int score;         ///< 当前得分
+    bool game_over;    ///< 游戏结束标志（true表示游戏结束）
+    bool paused;       ///< 游戏暂停标志（true表示游戏暂停）
+    int speed;         ///< 游戏速度（毫秒，控制蛇移动的延迟时间）
+    int highest_score; ///< 最高得分（历史最高分）
 } GameState;
 
 // =============================================
@@ -143,6 +144,7 @@ static int console_height = CONSOLE_HEIGHT;    ///< 实际控制台高度（行�
 static int last_score = -1;                    ///< 上一次绘制的得分，用于增量更新
 static int last_speed = -1;                    ///< 上一次绘制的速度，用于增量更新
 static bool last_paused = true;                ///< 上一次绘制的暂停状态，用于增量更新（初始为true确保第一次绘制）
+static int last_highest_score = -1;            ///< 上一次绘制的最高分，用于增量更新
 static bool ui_initialized = false;            ///< 界面是否已初始化（静态元素是否已绘制）
 
 // =============================================
@@ -174,6 +176,11 @@ static bool handle_input(void);
 
 // 游戏重置函数
 static void reset_game(void);
+
+// 最高分管理函数
+static void load_highest_score(void);
+static void save_highest_score(void);
+static void update_highest_score(void);
 
 // =============================================
 // Windows API控制台输出函数
@@ -505,6 +512,9 @@ static void init_game_state(void)
     game.paused = false;
     game.speed = 150; // 初始速度150毫秒
 
+    // 加载最高分记录
+    load_highest_score();
+
     // 初始化蛇
     game.snake.length = 3;
     game.snake.direction = DIR_RIGHT;
@@ -567,6 +577,7 @@ static void generate_food(void)
         {
             // 如果找不到合适的位置，游戏胜利
             game.game_over = true;
+            update_highest_score(); // 更新最高分
             return;
         }
     } while (get_cell_type((Position){x, y}) != CELL_EMPTY);
@@ -615,13 +626,13 @@ static void draw_game(void)
         // 绘制控制说明（静态，只需要绘制一次）
         int right_info_x = console_width / 2 + 9;
         int info_y = GAME_AREA_Y + 2;
-        printf_at(right_info_x, info_y + 4,
-                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-                  L"控制: WASD 或 方向键");
         printf_at(right_info_x, info_y + 5,
                   FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-                  L"退出: Q键，重玩: R键");
+                  L"控制: WASD 或 方向键");
         printf_at(right_info_x, info_y + 6,
+                  FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+                  L"退出: Q键，重玩: R键");
+        printf_at(right_info_x, info_y + 7,
                   FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
                   L"暂停: 空格键或P键");
 
@@ -673,10 +684,18 @@ static void draw_game(void)
         last_speed = game.speed;
     }
 
+    // 如果最高分变化，更新最高分信息
+    if (game.highest_score != last_highest_score)
+    {
+        printf_at(right_info_x, info_y + 2, FOREGROUND_RED | FOREGROUND_INTENSITY,
+                  L"最高分: %d", game.highest_score);
+        last_highest_score = game.highest_score;
+    }
+
     // 如果暂停状态变化，更新暂停信息
     if (game.paused != last_paused)
     {
-        printf_at(right_info_x, info_y + 2, game.paused ? FOREGROUND_RED | FOREGROUND_INTENSITY : FOREGROUND_GREEN | FOREGROUND_INTENSITY,
+        printf_at(right_info_x, info_y + 3, game.paused ? FOREGROUND_RED | FOREGROUND_INTENSITY : FOREGROUND_GREEN | FOREGROUND_INTENSITY,
                   L"状态: %ls", game.paused ? L"暂停  " : L"进行中");
         last_paused = game.paused;
     }
@@ -798,6 +817,7 @@ static void update_game(void)
     {
         // 撞墙或撞到自己身体，游戏结束
         game.game_over = true;
+        update_highest_score(); // 更新最高分
         return;
     }
 
@@ -966,6 +986,56 @@ static bool handle_input(void)
 // =============================================
 
 /**
+ * 加载最高分
+ *
+ * 功能：从文件中读取最高分记录，如果文件不存在则创建并初始化为0。
+ */
+static void load_highest_score(void)
+{
+    FILE *file = fopen("snake_highest_score.dat", "rb");
+    if (file != NULL)
+    {
+        fread(&game.highest_score, sizeof(int), 1, file);
+        fclose(file);
+    }
+    else
+    {
+        // 文件不存在，初始化最高分为0
+        game.highest_score = 0;
+        save_highest_score(); // 保存初始文件
+    }
+}
+
+/**
+ * 保存最高分
+ *
+ * 功能：将当前最高分保存到文件中，以便下次游戏加载。
+ */
+static void save_highest_score(void)
+{
+    FILE *file = fopen("snake_highest_score.dat", "wb");
+    if (file != NULL)
+    {
+        fwrite(&game.highest_score, sizeof(int), 1, file);
+        fclose(file);
+    }
+}
+
+/**
+ * 更新最高分
+ *
+ * 功能：检查当前得分是否超过最高分，如果是则更新最高分并保存到文件。
+ */
+static void update_highest_score(void)
+{
+    if (game.score > game.highest_score)
+    {
+        game.highest_score = game.score;
+        save_highest_score();
+    }
+}
+
+/**
  * 重置游戏状态（用于重玩）
  *
  * 功能：重置游戏状态到初始状态，但不重新初始化控制台。
@@ -981,6 +1051,7 @@ static void reset_game(void)
     last_score = -1;
     last_speed = -1;
     last_paused = true;
+    last_highest_score = -1;
 }
 
 // =============================================
