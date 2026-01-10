@@ -196,7 +196,6 @@ static void init_console(void)
         windowSize.Right = requestedWidth - 1;
         windowSize.Bottom = requestedHeight - 1;
         SetConsoleWindowInfo(hConsole, TRUE, &windowSize);
-
     }
 
     // 隐藏光标
@@ -205,7 +204,6 @@ static void init_console(void)
     cursorInfo.bVisible = FALSE;
     SetConsoleCursorInfo(hConsole, &cursorInfo);
 }
-
 
 /**
  * 统一的控制台输出函数：定位、更改颜色、格式化输出
@@ -271,18 +269,17 @@ static void clear_screen(void)
 /**
  * 获取游戏池单元格的控制台位置
  *
- * 功能：将游戏池坐标(x,y)转换为控制台屏幕坐标。
+ * 功能：将游戏池坐标转换为控制台屏幕坐标。
  * 游戏池坐标以(0,0)为左上角，控制台坐标以GAME_AREA_X和GAME_AREA_Y为偏移基准。
  *
- * @param pool_x 游戏池中的X坐标（单元格索引，0~POOL_WIDTH-1）
- * @param pool_y 游戏池中的Y坐标（单元格索引，0~POOL_HEIGHT-1）
+ * @param pool_pos 游戏池中的位置（包含x和y坐标，单元格索引）
  * @return Position 对应的控制台坐标位置
  */
-static Position get_cell_console_position(int pool_x, int pool_y)
+static Position get_cell_console_position(Position pool_pos)
 {
     Position pos;
-    pos.x = GAME_AREA_X + pool_x;
-    pos.y = GAME_AREA_Y + pool_y;
+    pos.x = GAME_AREA_X + pool_pos.x;
+    pos.y = GAME_AREA_Y + pool_pos.y;
     return pos;
 }
 
@@ -300,13 +297,12 @@ static Position get_cell_console_position(int pool_x, int pool_y)
  *   - CELL_SNAKE_TAIL: 绿色"尾"字
  *   - CELL_WALL:   白色背景黑色"墙"字
  *
- * @param pool_x 游戏池中的X坐标（单元格索引）
- * @param pool_y 游戏池中的Y坐标（单元格索引）
+ * @param pool_pos 游戏池中的位置（包含x和y坐标，单元格索引）
  */
-static void draw_cell(int pool_x, int pool_y)
+static void draw_cell(Position pool_pos)
 {
-    CellType cell = pool[pool_y][pool_x];
-    Position console_pos = get_cell_console_position(pool_x, pool_y);
+    CellType cell = pool[pool_pos.y][pool_pos.x];
+    Position console_pos = get_cell_console_position(pool_pos);
     WORD attributes = 0;
     const wchar_t *wstr = L"  "; // 默认两个空格
 
@@ -391,15 +387,14 @@ static void init_pool(void)
  * 功能：将游戏池中指定坐标的单元格设置为指定的类型。
  * 此函数包含边界检查，确保坐标在有效范围内。
  *
- * @param x    目标单元格的X坐标（0~POOL_WIDTH-1）
- * @param y    目标单元格的Y坐标（0~POOL_HEIGHT-1）
+ * @param pos  目标单元格的位置（包含x和y坐标）
  * @param type 要设置的单元格类型（CellType枚举值）
  */
-static void set_cell_type(int x, int y, CellType type)
+static void set_cell_type(Position pos, CellType type)
 {
-    if (x >= 0 && x < POOL_WIDTH && y >= 0 && y < POOL_HEIGHT)
+    if (pos.x >= 0 && pos.x < POOL_WIDTH && pos.y >= 0 && pos.y < POOL_HEIGHT)
     {
-        pool[y][x] = type;
+        pool[pos.y][pos.x] = type;
     }
 }
 
@@ -409,15 +404,14 @@ static void set_cell_type(int x, int y, CellType type)
  * 功能：获取游戏池中指定坐标的单元格当前类型。
  * 此函数包含边界检查，如果坐标越界则返回CELL_WALL（视为墙壁）。
  *
- * @param x 目标单元格的X坐标
- * @param y 目标单元格的Y坐标
+ * @param pos 目标单元格的位置（包含x和y坐标）
  * @return CellType 指定坐标的单元格类型，如果越界则返回CELL_WALL
  */
-static CellType get_cell_type(int x, int y)
+static CellType get_cell_type(Position pos)
 {
-    if (x >= 0 && x < POOL_WIDTH && y >= 0 && y < POOL_HEIGHT)
+    if (pos.x >= 0 && pos.x < POOL_WIDTH && pos.y >= 0 && pos.y < POOL_HEIGHT)
     {
-        return pool[y][x];
+        return pool[pos.y][pos.x];
     }
     return CELL_WALL; // 越界视为墙壁
 }
@@ -475,13 +469,13 @@ static void init_game(void)
 
     // 在游戏池中设置蛇的位置
     // 设置蛇头
-    set_cell_type(game.snake.head.x, game.snake.head.y, CELL_SNAKE_HEAD);
+    set_cell_type(game.snake.head, CELL_SNAKE_HEAD);
 
     // 设置蛇身
-    set_cell_type(game.snake.head.x - 1, game.snake.head.y, CELL_SNAKE_BODY_RIGHT);
+    set_cell_type((Position){game.snake.head.x - 1, game.snake.head.y}, CELL_SNAKE_BODY_RIGHT);
 
     // 设置蛇尾
-    set_cell_type(game.snake.tail.x, game.snake.tail.y, CELL_SNAKE_TAIL);
+    set_cell_type(game.snake.tail, CELL_SNAKE_TAIL);
 
     // 生成第一个食物
     generate_food();
@@ -518,11 +512,11 @@ static void generate_food(void)
             game.game_over = true;
             return;
         }
-    } while (get_cell_type(x, y) != CELL_EMPTY);
+    } while (get_cell_type((Position){x, y}) != CELL_EMPTY);
 
     game.food.x = x;
     game.food.y = y;
-    set_cell_type(x, y, CELL_FOOD);
+    set_cell_type((Position){x, y}, CELL_FOOD);
 }
 
 /**
@@ -554,7 +548,8 @@ static void draw_game(void)
     {
         for (int x = 0; x < POOL_WIDTH; x++)
         {
-            draw_cell(x, y);
+            Position pos = {x, y};
+            draw_cell(pos);
         }
     }
 
@@ -695,7 +690,7 @@ static void update_game(void)
     }
 
     // 检查碰撞
-    CellType cell_ahead = get_cell_type(new_head.x, new_head.y);
+    CellType cell_ahead = get_cell_type(new_head);
 
     if (cell_ahead != CELL_EMPTY && cell_ahead != CELL_FOOD)
     {
@@ -730,7 +725,7 @@ static void update_game(void)
         }
 
         // 获取下一个位置的单元格类型（应该是蛇身）
-        CellType next_cell_type = get_cell_type(next_tail.x, next_tail.y);
+        CellType next_cell_type = get_cell_type(next_tail);
 
         // 如果下一个位置是蛇身，更新蛇尾方向为该蛇身的方向
         if (next_cell_type >= CELL_SNAKE_BODY_UP && next_cell_type <= CELL_SNAKE_BODY_RIGHT)
@@ -739,10 +734,10 @@ static void update_game(void)
         }
 
         // 清除当前蛇尾
-        set_cell_type(game.snake.tail.x, game.snake.tail.y, CELL_EMPTY);
+        set_cell_type(game.snake.tail, CELL_EMPTY);
 
         // 将下一个位置设为新的蛇尾
-        set_cell_type(next_tail.x, next_tail.y, CELL_SNAKE_TAIL);
+        set_cell_type(next_tail, CELL_SNAKE_TAIL);
 
         // 更新蛇尾位置
         game.snake.tail = next_tail;
@@ -765,10 +760,10 @@ static void update_game(void)
 
     // 将旧蛇头变为蛇身（根据移动方向）
     CellType old_head_type = direction_to_body_type(game.snake.direction);
-    set_cell_type(head.x, head.y, old_head_type);
+    set_cell_type(head, old_head_type);
 
     // 设置新蛇头
-    set_cell_type(new_head.x, new_head.y, CELL_SNAKE_HEAD);
+    set_cell_type(new_head, CELL_SNAKE_HEAD);
 
     // 更新蛇头位置
     game.snake.head = new_head;
@@ -855,8 +850,6 @@ static bool handle_input(void)
 
     return true; // 继续游戏
 }
-
-
 
 // =============================================
 // 主函数
