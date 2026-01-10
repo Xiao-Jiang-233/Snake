@@ -143,17 +143,35 @@ static int last_score = -1;                    ///< 上一次绘制的得分，�
 static int last_speed = -1;                    ///< 上一次绘制的速度，用于增量更新
 static bool ui_initialized = false;            ///< 界面是否已初始化（静态元素是否已绘制）
 
+// =============================================
 // 函数原型声明
-static void init_game_state(void);                                             ///< 初始化游戏状态（首次启动和重玩）
-static void generate_food(void);                                               ///< 在随机空位置生成食物
-static void draw_game(void);                                                   ///< 绘制游戏界面（增量渲染）
-static void update_game(void);                                                 ///< 更新游戏逻辑（移动、碰撞、得分）
-static bool handle_input(void);                                                ///< 处理用户输入（WASD/方向键/Q键）
-static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...); ///< 在控制台指定位置格式化输出
-static Direction body_type_to_direction(CellType type);                        ///< 蛇身单元格类型转方向
-static void set_cell_type(Position pos, CellType type);                        ///< 设置单元格类型并标记脏
-static CellType get_cell_type(Position pos);                                   ///< 获取单元格类型（带边界检查）
-static void reset_game(void);                                                  ///< 重置游戏状态（用于重玩）
+// =============================================
+
+// Windows API控制台输出函数
+static void init_console(void);
+static void printf_at(int x, int y, WORD attributes, const wchar_t *fmt, ...);
+static void clear_screen(void);
+
+// 游戏池定位和绘制函数
+static Position get_cell_console_position(Position pool_pos);
+static void draw_cell(Position pool_pos);
+
+// 游戏池初始化和管理
+static void init_pool(void);
+static void set_cell_type(Position pos, CellType type);
+static CellType get_cell_type(Position pos);
+
+// 游戏逻辑函数
+static void init_game_state(void);
+static void generate_food(void);
+static void draw_game(void);
+static CellType direction_to_body_type(Direction dir);
+static Direction body_type_to_direction(CellType type);
+static void update_game(void);
+static bool handle_input(void);
+
+// 游戏重置函数
+static void reset_game(void);
 
 // =============================================
 // Windows API控制台输出函数
